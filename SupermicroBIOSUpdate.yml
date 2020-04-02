@@ -1,0 +1,92 @@
+
+---
+- name: Playbook for Supermicro BIOS update
+  #To be run on the corresponding hosts
+  hosts: test0
+#  gather_facts: no
+  remote_user: root
+  
+  tasks:
+
+    - name: create directory for Bios file
+      file:
+        path: /var/tmp/BIOSFile/x10sra8_a24Custom
+        state: directory
+
+    - name: create directory for sum tool
+      file:
+        path: /var/tmp/SumTool
+        state: directory
+   #Make sure it's the custom bios file and the latest or intended version 
+    - name: Upload the BIOS File
+      unarchive:
+        src: files/x10sra8_a24Custom.zip
+        dest: /var/tmp/BIOSFile/x10sra8_a24Custom
+ 
+    - name: Upload the SUM Tool
+      unarchive:
+        src: files/sum_2.3.0_Linux_x86_64_20190808.tar.gz
+        dest: /var/tmp/SumTool
+
+    - name: Outputdmidecode
+      shell: dmidecode
+      register: Outputdmidecode  
+  
+    - name: Stop docker since the server will reboot after installing IPMI firmware
+      service:
+        name: docker
+        state: stopped
+
+#    - name: Make the AlUpdate executable
+#      file: 
+#        dest: /var/tmp/IPMIFirmware/2.08/linux/x64/AlUpdate 
+#        mode: a+x
+
+    - name: Make the sum executable
+      file: 
+        dest: /var/tmp/SumTool/sum_2.3.0_Linux_x86_64/sum
+        mode: a+x
+    
+    - name: Install ipmitool using yum
+      yum:
+        name: ipmitool
+        state: latest
+
+    - name: get the IPMI ip address
+      shell: ipmitool lan print | grep "IP Address"| tail -n 1|cut -f 2 -d':' | cut -c 2-14
+      register: ipmioutput
+
+    - name: show debug ipmioutput
+      debug:
+        var: ipmioutput
+
+#    - name: Install the IPMI firmware using AlUpdate
+#      shell: /var/tmp/IPMIFirmware/2.08/linux/x64/AlUpdate -f /var/tmp/IPMIFirmware/REDFISH_X10_386_20191115_unsigned.bin
+#      when:  Outputdmidecode.stdout is search ("Supermicro")
+#      ignore_errors: true
+
+    - name: Install the BIOS using sum
+      shell: /var/tmp/SumTool/sum_2.3.0_Linux_x86_64/sum -c UpdateBios --file /var/tmp/BIOSFile/x10sra8_a24Custom/X10SRA8-RH.A24 
+      when:  Outputdmidecode.stdout is search ("Supermicro")
+ 
+    - name: Remove the IPMI folder
+      file:
+        path: /var/tmp/IPMIFirmware 
+   #     state: absent
+
+    - name: Remove the sum folder
+      file:
+        path: /var/tmp/SumTool 
+   #     state: absent
+   #
+    - name: Outputdmidecode2
+      shell: dmidecode
+      register: Outputdmidecode2
+  
+    - name: debug  
+      debug:
+        var: Outputdmidecode2
+ #     when:  Outputdmidecode.stdout is search ("Supermicro")
+ #     when:  Outputdmidecode.stdout is search ("ASUSTeK COMPUTER")
+  
+ 

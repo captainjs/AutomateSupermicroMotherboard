@@ -1,0 +1,105 @@
+
+---
+- name: Playbook for January 2020 IPMI firmware update
+  #To be run on the corresponding hosts
+  hosts: test0
+#  gather_facts: no
+  remote_user: root
+  
+  tasks:
+
+    - name: create directory for IPMI firmware
+      file:
+        path: /var/tmp/IPMIFirmware
+        state: directory
+
+    - name: create directory for sum tool
+      file:
+        path: /var/tmp/SumTool
+        state: directory
+    
+    - name: Upload the IPMI firmware
+      unarchive:
+        src: files/REDFISH_X10_386_20191115_unsigned.zip
+        dest: /var/tmp/IPMIFirmware
+ 
+    - name: Upload the SUM Tool
+      unarchive:
+        src: files/sum_2.3.0_Linux_x86_64_20190808.tar.gz
+        dest: /var/tmp/SumTool
+
+    - name: Outputdmidecode
+      shell: dmidecode
+      register: Outputdmidecode  
+  
+    - name: Stop docker since the server will reboot after installing IPMI firmware
+      service:
+        name: docker
+        state: stopped
+
+    - name: Make the AlUpdate executable
+      file: 
+        dest: /var/tmp/IPMIFirmware/2.08/linux/x64/AlUpdate 
+        mode: a+x
+
+    - name: Make the sum executable
+      file: 
+        dest: /var/tmp/SumTool/sum_2.3.0_Linux_x86_64/sum
+        mode: a+x
+
+    - name: install ipmitool 
+      yum:
+        name: ipmitool
+        state: latest
+
+    - name: get the IPMI ip address
+      shell: ipmitool lan print | grep "IP Address"| tail -n 1|cut -f 2 -d':' | cut -c 2-14
+      register: ipmioutput
+
+    - name: show debug ipmioutput
+      debug:
+        var: ipmioutput
+
+ #   - name: Install the IPMI firmware using AlUpdate
+ #     shell: /var/tmp/IPMIFirmware/2.08/linux/x64/AlUpdate -f /var/tmp/IPMIFirmware/REDFISH_X10_386_20191115_unsigned.bin
+ #     when:  Outputdmidecode.stdout is search ("Supermicro")
+ #     ignore_errors: true
+
+    - name: Install the IPMI firmware using sum
+      shell: /var/tmp/SumTool/sum_2.3.0_Linux_x86_64/sum -i {{ ipmioutput.stdout }} -u ADMIN -p ADMIN -c UpdateBmc --file /var/tmp/IPMIFirmware/REDFISH_X10_386_20191115_unsigned.bin --overwrite_cfg --overwrite_sdr
+      when:  Outputdmidecode.stdout is search ("Supermicro")
+ 
+#    - name: Install the IPMI firmware using sum
+#      shell: /var/tmp/SumTool/sum_2.3.0_Linux_x86_64/sum -i {{ ipmioutput.stdout }} -u ADMIN -p ADMIN -c UpdateBmc --file /var/tmp/IPMIFirmware/REDFISH_X10_386_20191115_unsigned.bin --overwrite_cfg --overwrite_sdr
+#      when:  Outputdmidecode.stdout is search ("Supermicro")
+
+    - name: Remove the IPMI folder
+      file:
+        path: /var/tmp/IPMIFirmware 
+   #     state: absent
+
+    - name: Remove the sum folder
+      file:
+        path: /var/tmp/SumTool 
+   #     state: absent
+   #
+    - name: Outputdmidecode2
+      shell: dmidecode
+      register: Outputdmidecode2
+  
+    - name: debug  
+      debug:
+        var: Outputdmidecode2
+  
+    - name: read the ipmi fw version
+      shell: ipmitool mc info | grep Firmware | tail -n 2 | cut -f 2 -d':' | cut -c 2-5
+      register: outputipmitool
+    
+    - name: Display the ipmi fw version
+      debug:
+        var: outputipmitool.stdout
+
+ #     when:  Outputdmidecode.stdout is search ("Supermicro")
+ #     when:  Outputdmidecode.stdout is search ("ASUSTeK COMPUTER")
+  
+ 
