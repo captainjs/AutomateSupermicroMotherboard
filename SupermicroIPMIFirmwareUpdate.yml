@@ -1,6 +1,6 @@
 
 ---
-- name: Playbook for January 2020 IPMI firmware update
+- name: Playbook for Supermicro IPMI firmware update
   #To be run on the corresponding hosts
   hosts: test0
 #  gather_facts: no
